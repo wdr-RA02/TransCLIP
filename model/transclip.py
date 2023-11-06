@@ -104,13 +104,13 @@ class TransCLIPModel(nn.Module):
         
         img = [Image.open(im).convert("RGB") for im in imgs]
         img = [transform(im) for im in img]
-        img_tensor = torch.stack(img, dim=0).to(self.device)
+        img_tensor = torch.stack(img, dim=0).to(self.device, non_blocking=True)
         
         return img_tensor
 
     
     def encode_texts(self, txts: List[str]) -> torch.LongTensor:
-        texts = clip.tokenize(txts, truncate=True).to(self.device)
+        texts = clip.tokenize(txts, truncate=True).to(self.device, non_blocking=True)
 
         return texts
 
@@ -129,7 +129,8 @@ class TransCLIPModel(nn.Module):
         '''
 
         batch = len(personas)
-        persona_onehots = torch.zeros(batch, self.n_persona, dtype=self.clip_model.dtype).to(self.device)
+        persona_onehots = torch.zeros(batch, self.n_persona, 
+                                      dtype=self.clip_model.dtype).to(self.device, non_blocking=True)
         for i, item in enumerate(personas):
             p_index = self.persona_dict.get(item, self.n_persona-1)
             # set the corr persona to 1
