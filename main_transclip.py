@@ -156,16 +156,31 @@ if __name__=="__main__":
     logging.basicConfig(format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
                         datefmt = "%Y-%m-%d %H:%M:%S", level = logging.INFO)
     args = parse_args()
-
     train_conf, model_conf = conf_from_yaml(args.train_cfg)
-    output_dir = os.path.join(train_conf["work_dir"], "output")
-    os.makedirs(output_dir, exist_ok=True)
+
+    work_dir_root = train_conf["work_dir"]
+    # make work_dir
+    os.makedirs(work_dir_root, exist_ok=True)
+    
+    # find the max run and create a folder for next run
+    import re
+    pat = re.compile("^run(\d*)$")
+    cur_run = 1
+    runs = list(filter(lambda x:re.match(pat, x) is not None, os.listdir(work_dir_root)))
+    runs.sort(key=lambda x:int(re.findall(pat, x)[0]))
+
+    if len(runs) > 0:
+        cur_run = int(re.findall(pat, runs[-1])[0]) + 1
+    work_dir = os.path.join(work_dir_root, f"run{cur_run}")
+    os.makedirs(work_dir, exist_ok=True)
+
+    output_dir = os.path.join(work_dir, "output")
+    train_conf["work_dir"] = work_dir
     # load metric meter
-    log_dir = os.path.join(train_conf["work_dir"], "logs")
+    log_dir = os.path.join(work_dir, "logs")
     meter = TensorboardLogger(
         log_dir=log_dir
     )
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, train_dl = load_model_and_dl(train_conf, model_conf, device)
 
