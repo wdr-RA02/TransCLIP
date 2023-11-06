@@ -1,0 +1,18 @@
+model:
+  clip_type: ViT-B/16
+  hidden_dim: 512
+  num_layers_img: 2
+  num_layers_txt: 2
+  dropout: 0.05
+  # maybe use
+  freeze_text: false
+  freeze_vision: false
+
+data:
+  pcap_root: PCAP_PATH_HERE
+  max_len: 30
+  splits: {
+    "train": "train.json",
+    "val": "val.json",
+    "test": "test.json"
+  }
