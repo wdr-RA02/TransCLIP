@@ -57,12 +57,12 @@ class TransCLIPModel(nn.Module):
             nn.Dropout(p=self.args["dropout"]),
             nn.Linear(self.img_dim, self.hidden_dim)
         ]
-
+        
         ff_layers += [
             nn.ReLU(),
             nn.Dropout(p=self.args["dropout"]),
             nn.Linear(self.hidden_dim, self.hidden_dim)
-        ] * n_layers_img
+        ] * (n_layers_img-1)
 
         self.img_feedfwd = nn.Sequential(*ff_layers).to(dtype=self.clip_model.dtype)
 
@@ -222,6 +222,7 @@ class TransCLIPModel(nn.Module):
 
         return loss, num_correct
 
+    @torch.no_grad()
     def eval_batch(self, imgs, personas, gt_captions, candidates):
         '''
         args:
