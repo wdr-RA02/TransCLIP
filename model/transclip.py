@@ -211,7 +211,7 @@ class TransCLIPModel(nn.Module):
                                 captions=caption_tokens,
                                 personas=personas)
 
-        score = (features["img_feature"] + features["personality_feature"]) @ features["text_feature"].t()
+        score = ((features["img_feature"] + features["personality_feature"])/2.) @ features["text_feature"].t()
 
         # obtain logprob of score
         logprob = F.log_softmax(score, dim=1)
@@ -256,7 +256,7 @@ class TransCLIPModel(nn.Module):
         cand_feature = features["text_feature"].reshape(batch, -1, self.text_dim)
         # cand_feature = [100*b, self.txt_dim] -> [b, 100, self.txt_dim]
         score = torch.bmm(
-            (features["img_feature"] + features["personality_feature"]).unsqueeze(1),
+            ((features["img_feature"] + features["personality_feature"])/2.).unsqueeze(1),
             cand_feature.transpose(-1,-2),
         ).squeeze(1)
 
