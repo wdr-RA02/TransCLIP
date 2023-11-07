@@ -37,7 +37,7 @@ def eval_logic(model, eval_ds, train_conf, logger, verboose=False):
     '''
     perform a simple evaluation after one epoch
     '''
-
+    torch.cuda.empty_cache()
     eval_dl = build_dataloader(eval_ds, batch=train_conf["eval_batch_size"], 
                               num_workers=train_conf["eval_num_workers"],
                               dist_training=False, shuffle=True)
