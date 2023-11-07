@@ -88,6 +88,7 @@ if __name__=="__main__":
                                dist_training=False,
                                shuffle=False)
     loss, recall_1 = test_logic(model, test_dl, args.cand_source)
+    recall_1 /= len(test_ds)
     logger.info("Eval done")
     logger.info(f"Recall@1: {recall_1}, loss: {loss}")
     
