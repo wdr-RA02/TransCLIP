@@ -33,6 +33,7 @@ def save_ckpt(model, metrics, save_path:str, data_args):
     }
     torch.save(save_items, save_path)
 
+@torch.no_grad()
 def eval_logic(model, eval_ds, train_conf, logger, verboose=False):
     '''
     perform a simple evaluation after one epoch
