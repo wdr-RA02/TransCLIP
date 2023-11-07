@@ -175,6 +175,8 @@ if __name__=="__main__":
     os.makedirs(work_dir, exist_ok=True)
 
     output_dir = os.path.join(work_dir, "output")
+    os.makedirs(output_dir, exist_ok=True)
+    
     train_conf["work_dir"] = work_dir
     # load metric meter
     log_dir = os.path.join(work_dir, "logs")
