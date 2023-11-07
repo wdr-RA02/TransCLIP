@@ -44,7 +44,7 @@ def get_candidates(item, source):
     if source=="additional":
         candidates = [(orig, *add) for orig, add in zip(item["comment"], item["additional_comments"])]
     else:
-        candidates = item["candidiates"]
+        candidates = item["candidates"]
     
     return candidates
 
