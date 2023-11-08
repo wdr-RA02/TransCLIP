@@ -32,9 +32,9 @@ def get_optim_scheduler(params, lr, total_steps:int, warmup_ratio:float, weight_
     Return AdamW optim and scheduler with warmup
     '''
     optim = AdamW(params=params, lr=lr, weight_decay=weight_decay)
-    scheduler = get_constant_schedule_with_warmup(optim, num_warmup_steps=int(warmup_ratio * total_steps))
-    # scheduler = get_linear_schedule_with_warmup(optim, num_warmup_steps=int(warmup_ratio * total_steps),
-    #                                         num_training_steps = total_steps)
+    # scheduler = get_constant_schedule_with_warmup(optim, num_warmup_steps=int(warmup_ratio * total_steps))
+    scheduler = get_linear_schedule_with_warmup(optim, num_warmup_steps=int(warmup_ratio * total_steps),
+                                            num_training_steps = total_steps)
                                                 
     return optim, scheduler
 
@@ -147,6 +147,25 @@ def load_model_and_dl(train_conf, model_conf, device):
     logger.info(f"Loading model on device: {device}")
     model = TransCLIPModel(train_ds.persona_lists, model_args).to(device)
     logger.info("Model load done")
+
+    if train_conf.get("freeze_vision", False):
+        logging.info("Freeze CLIP ViT")
+        for param in model.clip_model.visual.parameters():
+            param.requires_grad=False
+    
+    if train_conf.get("freeze_text", False):
+        logging.info("Freeze CLIP Text Encoder")
+        for param in model.clip_model.transformer.parameters():
+            param.requires_grad=False
+        for param in model.clip_model.token_embedding.parameters():
+            param.requires_grad=False
+        for param in model.clip_model.ln_final.parameters():
+            param.requires_grad=False
+        model.clip_model.text_projection.requires_grad=False
+    
+    logging.info("Trainable parameters: ")
+    print(*[n for n,p in model.named_parameters() \
+            if p.requires_grad], sep="\n")
     
     return model, train_dl
 
@@ -176,7 +195,7 @@ if __name__=="__main__":
 
     output_dir = os.path.join(work_dir, "output")
     os.makedirs(output_dir, exist_ok=True)
-    
+
     train_conf["work_dir"] = work_dir
     # load metric meter
     log_dir = os.path.join(work_dir, "logs")
