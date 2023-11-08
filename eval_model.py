@@ -82,7 +82,9 @@ if __name__=="__main__":
     neat_print_dict(data_args)
     logger.info("Data config ends")
 
-    test_ds = PCapDataset.from_config(data_args, split="test")
+    test_ds = PCapDataset.from_config(data_args,
+                                      img_transform=model.clip_transform,
+                                      split="test")
     test_dl = build_dataloader(test_ds, 
                                batch=args.batch_size,
                                num_workers=args.num_workers,

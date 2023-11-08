@@ -1,19 +1,25 @@
 import json
 import os.path as osp
 
+from PIL import Image
+from torchvision import transforms
 from torch.utils.data import Dataset
 from typing import Dict, List, Union, Optional
 from .utils import img_hash_to_addr, collate_test_set, pre_captions
 
 class Personality_Captions(Dataset):
     def __init__(self, pcap_root: str, split: str,
-                 max_len:int=30, split_dict:Dict[str,str] = None,
+                 img_transform,
+                 max_len:int=30, 
+                 split_dict:Dict[str,str] = None,
                  merge_test: bool=False,
                  **kwargs):
         super().__init__()
 
         self.pcap_root = pcap_root
         self.img_addr = osp.join(pcap_root, "yfcc_images")
+
+        self.img_transform = img_transform
 
         if split_dict is None:
             split_dict={
@@ -72,6 +78,10 @@ class Personality_Captions(Dataset):
         item["comment"] = pre_captions(item["comment"], self.max_len)
         if "candidates" in item:
             item["candidates"] = pre_captions(item["candidates"], self.max_len)
+        
+        # open image here to accel the process
+        image = Image.open(item.pop("images")).convert("RGB")
+        item["images"] = self.img_transform(image).squeeze(0)
 
         '''
         out is dict of
@@ -86,13 +96,14 @@ class Personality_Captions(Dataset):
         return len(self.annotation)
     
     @classmethod
-    def from_config(cls, data_cfg, split: str="train"):
+    def from_config(cls, data_cfg, img_transform, split: str="train"):
         # load a Dataset instance from data_cfg
         import os
         debug = (os.environ.get("DEBUG", 0)=="1")
 
         return cls(pcap_root = data_cfg["pcap_root"],
                    split = split,
+                   img_transform = img_transform,
                    max_len = data_cfg["max_len"],
                    merge_test = data_cfg.get("merge_test", False),
                    split_dict = data_cfg["splits"],

@@ -101,7 +101,9 @@ def train(model, data_loader, train_args:Dict[str,str], data_args: Dict[str,str]
         logger.info(f"---------Finished epoch {e}-------------")
 
         # evaluation after batch
-        eval_ds = PCapDataset.from_config(data_args, split="val")
+        eval_ds = PCapDataset.from_config(data_args, 
+                                          img_transform=model.clip_transform,
+                                          split="val")
         eval_loss, corr_per = eval_logic(model, eval_ds, train_conf, logger)
         meter.update_metrics({"eval": {"loss": eval_loss, "corr_per": corr_per}})
 
@@ -138,7 +140,9 @@ def load_model_and_dl(train_conf, model_conf, device):
 
     # make dirs
     logger.info("Loading dataset")
-    train_ds = PCapDataset.from_config(data_args, split="train")
+    train_ds = PCapDataset.from_config(data_args, 
+                                       img_transform=None,
+                                       split="train")
     train_dl = build_dataloader(train_ds, batch=train_conf["train_batch_size"], 
                               num_workers=train_conf["train_num_workers"],
                               dist_training=False, shuffle=True)
@@ -147,6 +151,9 @@ def load_model_and_dl(train_conf, model_conf, device):
     logger.info(f"Loading model on device: {device}")
     model = TransCLIPModel(train_ds.persona_lists, model_args).to(device)
     logger.info("Model load done")
+
+    # load transform
+    train_ds.img_transform = model.clip_transform
 
     if train_conf.get("freeze_vision", False):
         logging.info("Freeze CLIP ViT")

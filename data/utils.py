@@ -1,4 +1,4 @@
-import re, math
+import re, math, torch
 import os.path as osp
 
 from typing import Union, List, Dict
@@ -100,7 +100,10 @@ def build_dataloader(src_dataset,
         a_union = {}
         # fetch ele from each record to build a union dict
         for k in max_keys:
-            a_union[k] = [item.get(k, None) for item in a]
+            a_union[k] = [item[k] for item in a if k in item]
+            # stack as tensor
+            if all(isinstance(v, torch.Tensor) for v in a_union[k]):
+                a_union[k] = torch.stack(a_union[k], dim=0)
             
         return a_union
 

@@ -109,12 +109,16 @@ class TransCLIPModel(nn.Module):
         self.persona_dict = {p:i for i,p in enumerate(self.persona_list)}
 
     def encode_imgs(self, imgs:List[str], transform = None) -> torch.Tensor:
+        if isinstance(imgs, torch.Tensor):
+            return imgs.to(device=self.device, non_blocking=True)
+        elif not isinstance(imgs, list):
+            raise TypeError(f"Arg img must be List[str] or Tensor, got {type(imgs)}. ")
+        
         if transform is None:
             transform = self.clip_transform
         
-        img = [Image.open(im).convert("RGB") for im in imgs]
-        img = [transform(im) for im in img]
-        img_tensor = torch.stack(img, dim=0).to(self.device, non_blocking=True)
+        img = [transform(Image.open(im).convert("RGB")) for im in imgs]
+        img_tensor = torch.stack(img, dim=0).to(device=self.device, non_blocking=True)
         
         return img_tensor
 
