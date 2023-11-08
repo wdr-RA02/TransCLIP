@@ -6,6 +6,16 @@ import torch.nn.functional as F
 from PIL import Image
 from typing import List, Optional, Union
 
+def clip_loss(score):
+    logprob = F.log_softmax(score, dim=1)
+    logprob_tr = F.log_softmax(score.t(), dim=1)
+    targets = torch.arange(0, logprob.shape[1], dtype=torch.long, 
+                           device=logprob.device)
+    
+    loss = (F.nll_loss(logprob, targets) + F.nll_loss(logprob_tr, targets))/2.
+
+    return loss
+
 class TransCLIPModel(nn.Module):
     def __init__(self, 
                  persona_list: List[str],
@@ -210,14 +220,13 @@ class TransCLIPModel(nn.Module):
         features = self.forward(pixel_values=pixels,
                                 captions=caption_tokens,
                                 personas=personas)
-
-        score = ((features["img_feature"] + features["personality_feature"])/2.) @ features["text_feature"].t()
+        img_per = F.normalize((features["img_feature"] + features["personality_feature"]), p=2, dim=-1)
+        score =  img_per @ features["text_feature"].t() 
 
         # obtain logprob of score
+        loss = clip_loss(score * self.clip_model.logit_scale.exp())
         logprob = F.log_softmax(score, dim=1)
         targets = torch.arange(0, logprob.shape[1], dtype=torch.long, device=self.device)
-
-        loss = F.nll_loss(logprob, targets)
         num_correct = int((torch.max(logprob, dim=1)[1]==targets).cpu().sum())
 
         return loss, num_correct
@@ -254,9 +263,10 @@ class TransCLIPModel(nn.Module):
                                 personas=personas)
         
         cand_feature = features["text_feature"].reshape(batch, -1, self.text_dim)
+        img_per = F.normalize((features["img_feature"] + features["personality_feature"]), p=2, dim=-1)
         # cand_feature = [100*b, self.txt_dim] -> [b, 100, self.txt_dim]
         score = torch.bmm(
-            ((features["img_feature"] + features["personality_feature"])/2.).unsqueeze(1),
+            img_per.unsqueeze(1),
             cand_feature.transpose(-1,-2),
         ).squeeze(1)
 
@@ -273,7 +283,3 @@ class TransCLIPModel(nn.Module):
         loss = F.nll_loss(logprob, targets)
 
         return loss, corr
-
-
-
-
