@@ -48,6 +48,7 @@ def get_candidates(item, source):
     
     return candidates
 
+@torch.no_grad()
 def test_logic(model, test_dataloader, cand_source):
     torch.cuda.empty_cache()
     recall_1 = 0
@@ -88,7 +89,8 @@ if __name__=="__main__":
                                dist_training=False,
                                shuffle=False)
     loss, recall_1 = test_logic(model, test_dl, args.cand_source)
-    recall_1 /= len(test_ds)
+    recall_1_per = round(100*(recall_1/len(test_ds)), 2)
     logger.info("Eval done")
-    logger.info(f"Recall@1: {recall_1}, loss: {loss}")
+    logger.info(f"Correct: {recall_1}/{len(test_ds)}")
+    logger.info(f"Recall@1: {recall_1_per}, loss: {loss}")
     

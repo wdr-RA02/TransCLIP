@@ -41,7 +41,7 @@ def eval_logic(model, eval_ds, train_conf, logger, verboose=False):
     torch.cuda.empty_cache()
     eval_dl = build_dataloader(eval_ds, batch=train_conf["eval_batch_size"], 
                               num_workers=train_conf["eval_num_workers"],
-                              dist_training=False, shuffle=True)
+                              dist_training=False, shuffle=False)
     eval_items = len(eval_ds)
     total_corr = 0.0
     total_loss = 0.0
@@ -50,10 +50,10 @@ def eval_logic(model, eval_ds, train_conf, logger, verboose=False):
     for i,item in tqdm(enumerate(eval_dl), total = len(eval_dl), desc=f"Eval"):
         # forward
         model.eval()
-        loss, num_corr = model.forward_batch(imgs=item["images"],
-                                        captions=item["comment"],
-                                        personas=item["personality"],
-                                        training=False)
+        loss, num_corr = model.eval_batch(imgs=item["images"],
+                                        gt_captions=item["comment"],
+                                        candidates=item["candidates"],
+                                        personas=item["personality"])
         # backward
         total_corr+=num_corr
         total_loss+=loss.item()
