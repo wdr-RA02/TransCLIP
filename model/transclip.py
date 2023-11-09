@@ -266,7 +266,7 @@ class TransCLIPModel(nn.Module):
                                 captions=caption_tokens,
                                 personas=personas)
         
-        cand_feature = features["text_feature"].reshape(batch, -1, self.text_dim)
+        cand_feature = features["text_feature"].reshape(batch, -1, self.hidden_dim)
         img_per = F.normalize((features["img_feature"] + features["personality_feature"]), p=2, dim=-1)
         # cand_feature = [100*b, self.txt_dim] -> [b, 100, self.txt_dim]
         score = torch.bmm(
