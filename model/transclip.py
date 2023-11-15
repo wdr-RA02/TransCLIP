@@ -47,6 +47,7 @@ class TransCLIPModel(nn.Module):
         n_layers_txt = self.args["num_layers_txt"]
 
         # build feed forward layers like TransResNet do
+        self.mlp_ratio = 3.0
         self.build_img_feedfwd(n_layers_img)
         self.build_persona_ln()
         self.build_text_feedfwd(n_layers_txt)
@@ -61,29 +62,31 @@ class TransCLIPModel(nn.Module):
         if not 0<=self.args["dropout"]<1.0:
             raise ValueError("Drop rate must be in the range of [0.0, 1.0)")
         # hidden_clip -> hidden_dim first
+        mlp_hidden = int(self.mlp_ratio * self.hidden_dim)
         ff_layers = [
-            # nn.BatchNorm1d(self.img_dim),
-            nn.LayerNorm(self.img_dim),
-            nn.Dropout(p=self.args["dropout"]),
+            # nn.LayerNorm(self.img_dim),
+            # nn.Dropout(p=self.args["dropout"]),
             nn.Linear(self.img_dim, self.hidden_dim)
         ]
         
         ff_layers += [
+            nn.Linear(self.hidden_dim, mlp_hidden),
             nn.ReLU(),
-            nn.Dropout(p=self.args["dropout"]),
-            nn.Linear(self.hidden_dim, self.hidden_dim)
-        ] * (n_layers_img-1)
+            # nn.Dropout(p=self.args["dropout"]),
+            nn.Linear(mlp_hidden, self.hidden_dim)
+        ] * n_layers_img
 
         self.img_feedfwd = nn.Sequential(*ff_layers).to(dtype=self.clip_model.dtype)
 
     def build_persona_ln(self):
+        mlp_hidden = int(self.mlp_ratio * self.hidden_dim)
         persona_ln = [
-            # nn.BatchNorm1d(self.n_persona),
-            nn.LayerNorm(self.n_persona),
-            nn.Dropout(p=self.args["dropout"]),
+            # nn.LayerNorm(self.n_persona),
+            # nn.Dropout(p=self.args["dropout"]),
             nn.Linear(self.n_persona, self.hidden_dim),
+            nn.Linear(self.hidden_dim, mlp_hidden),
             nn.ReLU(),
-            nn.Linear(self.hidden_dim, self.hidden_dim)
+            nn.Linear(mlp_hidden, self.hidden_dim)
         ]
 
         self.personality_enc = nn.Sequential(*persona_ln).to(dtype=self.clip_model.dtype)
@@ -91,16 +94,18 @@ class TransCLIPModel(nn.Module):
     def build_text_feedfwd(self, n_layers_txt:int):
         # hidden_clip -> hiddem_dim
         # MLP-Like structure
+        mlp_hidden = int(self.mlp_ratio * self.hidden_dim)
         ff_layers=[
-            nn.LayerNorm(self.text_dim),
-            nn.Dropout(p=self.args["dropout"]),
+            # nn.LayerNorm(self.text_dim),
+            # nn.Dropout(p=self.args["dropout"]),
             nn.Linear(self.text_dim, self.hidden_dim),
         ]
 
         ff_layers+=[
+            nn.Linear(self.hidden_dim, mlp_hidden),
             nn.ReLU(),
-            nn.Dropout(p=self.args["dropout"]),
-            nn.Linear(self.hidden_dim, self.hidden_dim)
+            # nn.Dropout(p=self.args["dropout"]),
+            nn.Linear(mlp_hidden, self.hidden_dim)
         ] * n_layers_txt
 
         self.text_feedfwd = nn.Sequential(*ff_layers).to(dtype=self.clip_model.dtype)
@@ -110,7 +115,7 @@ class TransCLIPModel(nn.Module):
 
     def encode_imgs(self, imgs:List[str], transform = None) -> torch.Tensor:
         if isinstance(imgs, torch.Tensor):
-            return imgs.to(device=self.device, non_blocking=True)
+            return imgs
         elif not isinstance(imgs, list):
             raise TypeError(f"Arg img must be List[str] or Tensor, got {type(imgs)}. ")
         
@@ -118,13 +123,13 @@ class TransCLIPModel(nn.Module):
             transform = self.clip_transform
         
         img = [transform(Image.open(im).convert("RGB")) for im in imgs]
-        img_tensor = torch.stack(img, dim=0).to(device=self.device, non_blocking=True)
+        img_tensor = torch.stack(img, dim=0)
         
         return img_tensor
 
     
     def encode_texts(self, txts: List[str]) -> torch.LongTensor:
-        texts = clip.tokenize(txts, truncate=True).to(self.device, non_blocking=True)
+        texts = clip.tokenize(txts, truncate=True).to(self.device)
 
         return texts
 
@@ -144,7 +149,8 @@ class TransCLIPModel(nn.Module):
 
         batch = len(personas)
         persona_onehots = torch.zeros(batch, self.n_persona, 
-                                      dtype=self.clip_model.dtype).to(self.device, non_blocking=True)
+                                      dtype=self.clip_model.dtype).to(self.device, 
+                                                                      non_blocking=True)
         for i, item in enumerate(personas):
             p_index = self.persona_dict.get(item, self.n_persona-1)
             # set the corr persona to 1
@@ -179,11 +185,11 @@ class TransCLIPModel(nn.Module):
             assert len(personas)==pixel_values.shape[0], "persona and img must be of equal len"
             persona_contain = True
 
-        img_feat = self.clip_model.encode_image(pixel_values)
+        img_feat = self.clip_model.encode_image(pixel_values.to(self.device, non_blocking=True))
         img_feat = self.img_feedfwd(img_feat)
         img_feat = F.normalize(img_feat, p=2, dim=1)
 
-        txt_feat = self.clip_model.encode_text(captions)
+        txt_feat = self.clip_model.encode_text(captions.to(self.device, non_blocking=True))
         txt_feat = self.text_feedfwd(txt_feat)
         txt_feat = F.normalize(txt_feat, p=2, dim=1)
 
@@ -219,10 +225,10 @@ class TransCLIPModel(nn.Module):
             self.train()
         
         pixels = self.encode_imgs(imgs)
-        caption_tokens = self.encode_texts(captions)
+        #  caption_tokens = self.encode_texts(captions)
 
         features = self.forward(pixel_values=pixels,
-                                captions=caption_tokens,
+                                captions=captions,
                                 personas=personas)
         img_per = F.normalize((features["img_feature"] + features["personality_feature"]), p=2, dim=-1)
         score =  img_per @ features["text_feature"].t() 
@@ -250,23 +256,32 @@ class TransCLIPModel(nn.Module):
         # get ranking of gold caption in candidates
         assert len(gt_captions) == len(candidates)
 
-        gt_rank = [item.index(gt) for item, gt in zip(candidates, gt_captions)]
+        # gt_rank = [item.index(gt) for item, gt in zip(candidates, gt_captions)]
+        cap_eq = torch.all(candidates==gt_captions.unsqueeze(1), dim=-1)
+        idx, gt_rank = torch.nonzero(cap_eq).split(1, dim=1)
+        _, counts = torch.unique(idx, return_counts=True)
+        # rshf cumsum of counts gets proper index
+        counts[1:]=counts.cumsum(dim=0)[0:-1]
+        counts[0]=0
+        # remove duplicates
+        gt_rank = gt_rank[counts,:].squeeze(1)
 
         # forward prop
         pixels = self.encode_imgs(imgs)
-        caption_tokens = [self.encode_texts(cand_str) for cand_str in candidates]
-        # caption_tokens = [100*L*D]
-        # stack the caption_tokens
-        batch = len(gt_captions)
-        txt_dim = caption_tokens[0].shape[-1]
-        caption_tokens = torch.stack(caption_tokens, dim=0).reshape(-1, txt_dim)
+        # caption_tokens = [self.encode_texts(cand_str) for cand_str in candidates]
+        # # caption_tokens = [100*L*D]
+        # # stack the caption_tokens
+        # batch = len(gt_captions)
+        # txt_dim = caption_tokens[0].shape[-1]
+        # caption_tokens = torch.stack(caption_tokens, dim=0).reshape(-1, txt_dim)
 
         # perform forward prop
+        batch = gt_captions.shape[0]
         features = self.forward(pixel_values=pixels,
-                                captions=caption_tokens,
+                                captions=candidates.reshape(batch*candidates.shape[1], -1),
                                 personas=personas)
         
-        cand_feature = features["text_feature"].reshape(batch, -1, self.text_dim)
+        cand_feature = features["text_feature"].reshape(batch, -1, self.hidden_dim)
         img_per = F.normalize((features["img_feature"] + features["personality_feature"]), p=2, dim=-1)
         # cand_feature = [100*b, self.txt_dim] -> [b, 100, self.txt_dim]
         score = torch.bmm(
@@ -277,6 +292,7 @@ class TransCLIPModel(nn.Module):
         # score = [b, (1,) 100]
         # fetch top-1 from score
         topk_indexes = score.topk(k=1, dim=-1)[1].cpu().squeeze(1)
+        # print(topk_indexes.shape)
         target_indexes = torch.tensor(gt_rank).to(dtype=topk_indexes.dtype)
         corr = int((topk_indexes==target_indexes).sum())
 

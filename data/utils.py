@@ -113,6 +113,7 @@ def build_dataloader(src_dataset,
                     pin_memory=True,
                     shuffle=(not dist_training) and shuffle,
                     sampler=sampler,
-                    collate_fn=collate_fn)
+                    # collate_fn=collate_fn
+                    )
 
     return dataloader

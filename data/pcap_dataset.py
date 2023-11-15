@@ -1,4 +1,5 @@
 import json
+import clip
 import os.path as osp
 
 from PIL import Image
@@ -20,6 +21,7 @@ class Personality_Captions(Dataset):
         self.img_addr = osp.join(pcap_root, "yfcc_images")
 
         self.img_transform = img_transform
+        self.text_transform = clip.tokenize
 
         if split_dict is None:
             split_dict={
@@ -76,11 +78,14 @@ class Personality_Captions(Dataset):
         
         item = img_hash_to_addr(samples, self.img_addr, self.img_name_fmt)
         item["comment"] = pre_captions(item["comment"], self.max_len)
+        item["comment"] = self.text_transform(item.pop("comment")).squeeze(0)
+
         if "candidates" in item:
             item["candidates"] = pre_captions(item["candidates"], self.max_len)
+            item["candidates"] = self.text_transform(item.pop("candidates"))
         
         # open image here to accel the process
-        image = Image.open(item.pop("images")).convert("RGB")
+        image = Image.open(item.pop("images"))
         item["images"] = self.img_transform(image).squeeze(0)
 
         '''
@@ -90,6 +95,7 @@ class Personality_Captions(Dataset):
             ...
         }
         '''
+        
         return item
 
     def __len__(self):
