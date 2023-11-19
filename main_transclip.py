@@ -80,7 +80,17 @@ def train(model, data_loader, train_args:Dict[str,str], data_args: Dict[str,str]
         for i, item in tqdm(enumerate(data_loader), 
                            total = step_per_epoch, desc=f"Epoch {e}/{epoches}"):
             # forward
-            loss, num_corr = train_iter(model, item, optim, scheduler, scaler)
+            model.train()
+            loss, num_corr = model.forward_batch(imgs=item["images"],
+                                                 captions=item["comment"],
+                                                 personas=item["personality"],
+                                                 training=True)
+                
+            loss.backward()
+            optim.step()
+            if scheduler is not None:
+                scheduler.step()
+            model.zero_grad()
         
             cur_lr = optim.param_groups[0]["lr"]
             if i % log_step == 0:
