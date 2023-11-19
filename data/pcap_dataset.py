@@ -88,6 +88,8 @@ class Personality_Captions(Dataset):
         # open image here to accel the process
         image = pil_loader(item.pop("images"))
         item["images"] = self.img_transform(image).squeeze(0)
+        # use persona_idx to rep persona
+        item["personality"]=self.persona_lists.index(item.pop("personality"))
 
         '''
         out is dict of
