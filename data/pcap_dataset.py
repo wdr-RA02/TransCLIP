@@ -7,6 +7,7 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 from typing import Dict, List, Union, Optional
 from .utils import img_hash_to_addr, collate_test_set, pre_captions
+from utils.misc import pil_loader
 
 class Personality_Captions(Dataset):
     def __init__(self, pcap_root: str, split: str,
@@ -85,7 +86,7 @@ class Personality_Captions(Dataset):
             item["candidates"] = self.text_transform(item.pop("candidates"))
         
         # open image here to accel the process
-        image = Image.open(item.pop("images"))
+        image = pil_loader(item.pop("images"))
         item["images"] = self.img_transform(image).squeeze(0)
 
         '''

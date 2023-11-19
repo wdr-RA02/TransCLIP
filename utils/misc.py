@@ -145,3 +145,8 @@ def compute_metrics_from_logits(logits, targets):
     MRR = MRR/batch_size
     return recall_k, MRR
 
+def pil_loader(img):
+    with open(img, "rb") as fp:
+        im = Image.open(fp).convert("RGB")
+    
+    return im
