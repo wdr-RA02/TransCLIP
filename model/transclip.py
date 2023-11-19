@@ -52,6 +52,8 @@ class TransCLIPModel(nn.Module):
         self.build_persona_ln()
         self.build_text_feedfwd(n_layers_txt)
 
+        self.add_post_layernorm = nn.LayerNorm(self.hidden_dim)
+
         self.device = self.clip_model.visual.proj.device
 
     @property
@@ -65,8 +67,8 @@ class TransCLIPModel(nn.Module):
         mlp_hidden = int(self.mlp_ratio * self.hidden_dim)
         ff_layers = [
             # nn.LayerNorm(self.img_dim),
-            # nn.Dropout(p=self.args["dropout"]),
-            nn.Linear(self.img_dim, self.hidden_dim)
+            nn.Dropout(p=self.args["dropout"]),
+            nn.Linear(self.img_dim, self.hidden_dim, bias=False)
         ]
         
         ff_layers += [
@@ -82,8 +84,8 @@ class TransCLIPModel(nn.Module):
         mlp_hidden = int(self.mlp_ratio * self.hidden_dim)
         persona_ln = [
             # nn.LayerNorm(self.n_persona),
-            # nn.Dropout(p=self.args["dropout"]),
-            nn.Linear(self.n_persona, self.hidden_dim),
+            nn.Dropout(p=self.args["dropout"]),
+            nn.Linear(self.n_persona, self.hidden_dim, bias=False),
             nn.Linear(self.hidden_dim, mlp_hidden),
             nn.ReLU(),
             nn.Linear(mlp_hidden, self.hidden_dim)
@@ -97,8 +99,8 @@ class TransCLIPModel(nn.Module):
         mlp_hidden = int(self.mlp_ratio * self.hidden_dim)
         ff_layers=[
             # nn.LayerNorm(self.text_dim),
-            # nn.Dropout(p=self.args["dropout"]),
-            nn.Linear(self.text_dim, self.hidden_dim),
+            nn.Dropout(p=self.args["dropout"]),
+            nn.Linear(self.text_dim, self.hidden_dim, bias=False),
         ]
 
         ff_layers+=[
@@ -116,6 +118,7 @@ class TransCLIPModel(nn.Module):
     def encode_imgs(self, imgs:List[str], transform = None) -> torch.Tensor:
         if isinstance(imgs, torch.Tensor):
             return imgs
+        
         elif not isinstance(imgs, list):
             raise TypeError(f"Arg img must be List[str] or Tensor, got {type(imgs)}. ")
         
@@ -133,7 +136,7 @@ class TransCLIPModel(nn.Module):
 
         return texts
 
-    def forward_persona(self, personas:List[str]) -> torch.Tensor:
+    def forward_persona(self, personas:torch.IntTensor) -> torch.Tensor:
         '''
         convert personality lists to a one-hot matrix of [b, n_persona]
 
@@ -147,15 +150,11 @@ class TransCLIPModel(nn.Module):
         - persona_onehots: the one-hot vecs of the personas in this batch
         '''
 
-        batch = len(personas)
+        batch = personas.shape[0]
         persona_onehots = torch.zeros(batch, self.n_persona, 
                                       dtype=self.clip_model.dtype).to(self.device, 
                                                                       non_blocking=True)
-        for i, item in enumerate(personas):
-            p_index = self.persona_dict.get(item, self.n_persona-1)
-            # set the corr persona to 1
-            persona_onehots[i, p_index] = 1
-            # print(p_index)
+        persona_onehots[torch.arange(batch), personas] = 1
         
         # send the one-hot vecs to persona encoder
         persona_feat = self.personality_enc(persona_onehots)
@@ -165,7 +164,7 @@ class TransCLIPModel(nn.Module):
     def forward(self,
                 pixel_values: torch.Tensor,
                 captions: torch.LongTensor,
-                personas: Optional[List[str]] = None,
+                personas: torch.IntTensor = None,
                 ):
         '''
         args:
@@ -180,9 +179,7 @@ class TransCLIPModel(nn.Module):
 
         persona_contain = False
         if personas is not None:
-            assert isinstance(personas, list) and len(personas)>0 and \
-                all([isinstance(p, str) for p in personas]), "persona list check failed"
-            assert len(personas)==pixel_values.shape[0], "persona and img must be of equal len"
+            assert personas.shape[0]==pixel_values.shape[0], "persona and img must be of equal len"
             persona_contain = True
 
         img_feat = self.clip_model.encode_image(pixel_values.to(self.device, non_blocking=True))
@@ -206,7 +203,11 @@ class TransCLIPModel(nn.Module):
             "personality_feature": persona_feat
         }
     
-    def forward_batch(self, imgs, captions, personas, training:bool = True):
+    def forward_batch(self, 
+                      imgs: torch.Tensor, 
+                      captions: torch.Tensor, 
+                      personas: torch.Tensor, 
+                      training: bool = True):
         '''
         during training, input imgs, captions and personas 
         and return the nll loss that maximizes the retrieval score
@@ -230,7 +231,9 @@ class TransCLIPModel(nn.Module):
         features = self.forward(pixel_values=pixels,
                                 captions=captions,
                                 personas=personas)
-        img_per = F.normalize((features["img_feature"] + features["personality_feature"]), p=2, dim=-1)
+        img_per = (features["img_feature"] + features["personality_feature"])
+        img_per = F.normalize(self.add_post_layernorm(img_per), p=2, dim=-1)
+
         score =  img_per @ features["text_feature"].t() 
 
         # obtain logprob of score
