@@ -4,25 +4,6 @@ import torch.cuda.amp as amp
 from tqdm import tqdm
 from data import build_dataloader
 
-def train_iter(model, item, optim, scheduler, scaler):
-    model.train()
-    with amp.autocast(enabled=True):
-        loss, num_corr = model.forward_batch(imgs=item["images"],
-                                             captions=item["comment"],
-                                             personas=item["personality"],
-                                             training=True)
-        
-    # fp16 varient of loss.backward
-    scaler.scale(loss).backward()
-    # fp16 varient of optim.step
-    scaler.step(optim)
-    scaler.update()
-    if scheduler is not None:
-        scheduler.step()
-    model.zero_grad()
-    
-    return loss, num_corr
-
 def save_ckpt(model, metrics, save_path:str, data_args):
     save_items={
         "model": model.state_dict(),

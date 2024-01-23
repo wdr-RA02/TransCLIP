@@ -144,4 +144,3 @@ def compute_metrics_from_logits(logits, targets):
         MRR += 1/rank
     MRR = MRR/batch_size
     return recall_k, MRR
-

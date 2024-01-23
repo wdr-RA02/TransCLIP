@@ -10,7 +10,7 @@ from typing import Dict
 from torch.optim import AdamW
 
 from model import TransCLIPModel
-from model.train_transclip import (train_iter, eval_logic, save_ckpt)
+from model.train_transclip import (eval_logic, save_ckpt)
 from data import PCapDataset, build_dataloader
 from transformers import (get_linear_schedule_with_warmup, 
                           get_constant_schedule_with_warmup)
@@ -80,19 +80,29 @@ def train(model, data_loader, train_args:Dict[str,str], data_args: Dict[str,str]
         for i, item in tqdm(enumerate(data_loader), 
                            total = step_per_epoch, desc=f"Epoch {e}/{epoches}"):
             # forward
-            loss, num_corr = train_iter(model, item, optim, scheduler, scaler)
-        
+            model.train()
+            items_gpu=[item.pop(k).to(device) for k in ["images", "comment", "personality"]]
+            loss, num_corr = model.forward_batch(imgs=items_gpu[0],
+                                                 captions=items_gpu[1],
+                                                 personas=items_gpu[2],
+                                                 training=True)
+                
+            loss.backward()
+            optim.step()
+            if scheduler is not None:
+                scheduler.step()
+            model.zero_grad()
             cur_lr = optim.param_groups[0]["lr"]
             if i % log_step == 0:
                 log_items = {
                     "Step": f"{(i+1)}/{step_per_epoch}",
                     "lr": f"{cur_lr:.2e}",
-                    "loss": f"{loss.item():.5f}",
+                    "loss": f"{loss.detach().item():.5f}",
                     "num_corr": f"{num_corr}/{train_conf['train_batch_size']}"
                 }
                 tqdm.write(get_log_str(log_items))
 
-            meter.update_metrics({"train": {"loss": loss}})
+            meter.update_metrics({"train": {"loss": loss.detach().item()}})
             meter.update_params({"params": {"lr": cur_lr}})
             meter.get_logs(global_step)
 
