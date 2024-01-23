@@ -49,7 +49,7 @@ def collate_test_set(src: VAL_TYPE)->VAL_TYPE:
     '''
 
     assert "additional_comments" in src.keys()
-    other_keys=[k for k in src.keys() if k not in ["comment","additional_comments"]]
+    other_keys=[k for k in src.keys() if k not in ["comment", "additional_comments"]]
     single_instance = isinstance(src["comment"],str)
     # other elements
     tgt={k:src[k] for k in other_keys}
@@ -58,7 +58,7 @@ def collate_test_set(src: VAL_TYPE)->VAL_TYPE:
     else:
         tgt["comment"]=[items for items in zip(src["comment"], *src["additional_comments"])]
     
-    del src["additional_comments"]
+    _ = tgt.pop("additional_comments", None)
 
     return tgt
 
